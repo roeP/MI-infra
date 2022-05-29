@@ -14,6 +14,7 @@
 ### Manual Steps
 * created sh key
 * crated tf state bucket
-* setup jenkins slave using spot fleet
 
 ### To fix
+* setup jenkins slave using spot fleet
+* setup packer ami for jenkins + slave
