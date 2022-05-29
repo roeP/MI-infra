@@ -31,3 +31,7 @@ data "aws_subnet_ids" "subnets" {
   vpc_id = data.aws_vpc.selected.id
 }
 
+data "template_file" "slave_userdata" {
+  template = file("${path.module}/templates/slave.sh.tpl")
+}
+
