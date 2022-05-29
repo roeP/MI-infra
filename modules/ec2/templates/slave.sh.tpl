@@ -7,7 +7,8 @@ sudo apt-get install -y \
     gnupg \
     lsb-release \
     nfs-common \
-    openjdk-8-jdk
+    openjdk-8-jdk \
+    awscli
     
 echo \
   "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
@@ -17,3 +18,5 @@ apt-get update
 apt-get install -y docker.io
 
 usermod -aG docker ubuntu
+
+eval $(aws ecr get-login --region us-east-1 --no-include-email)
