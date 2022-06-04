@@ -22,3 +22,5 @@
 * crated tf state bucket
 
 ### To fix
+* fix istio request ( small instance )
+* fix jenkins random restarts
