@@ -17,11 +17,3 @@ output "workers_iam_arn" {
 output "alb_iam_role" {
   value = aws_iam_role.alb_controller_iam_role.arn
 }
-
-output "oicd_url" {
-  value = aws_iam_openid_connect_provider.oidc_provider.url
-}
-
-output "oicd_arn" {
-  value = aws_iam_openid_connect_provider.oidc_provider.arn
-}

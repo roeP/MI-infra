@@ -9,6 +9,12 @@
 * jenkins https
 * seperate tf modules repo
 * 1 subnet id to save cost
+* TF state bucket - enable versioning
+* setup packer ami for jenkins + slave
+* setup jenkins slave using spot fleet
+* add healthchecks
+* add resource requests/limits
+
 
 
 ### Manual Steps
@@ -16,5 +22,3 @@
 * crated tf state bucket
 
 ### To fix
-* setup jenkins slave using spot fleet
-* setup packer ami for jenkins + slave

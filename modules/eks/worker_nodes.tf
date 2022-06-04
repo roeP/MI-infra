@@ -2,7 +2,7 @@ resource "aws_launch_template" "launch_template" {
   for_each = var.workers
   name          = "${each.value.name}-launch-template"
   image_id      = data.aws_ami.amzn-ami-eks.id
-  instance_type = "r5.large"
+  instance_type = "t3.micro"
   key_name      = var.ssh_key
   user_data     = base64encode(data.template_file.userdata[each.key].rendered)
 
@@ -11,7 +11,7 @@ resource "aws_launch_template" "launch_template" {
   }
 
   network_interfaces {
-    associate_public_ip_address = false
+    associate_public_ip_address = true
     security_groups             = ["${aws_security_group.workers.id}"]
     delete_on_termination       = true
   }
@@ -30,7 +30,7 @@ resource "aws_launch_template" "launch_template" {
   tags = merge(
     var.tags,
     {
-      "Name" = "${local.cluster_name}-worker"
+      "Name" = "${var.cluster_name}-worker"
     },
   )
 
@@ -38,7 +38,7 @@ resource "aws_launch_template" "launch_template" {
 
 
 resource "aws_iam_instance_profile" "worker-instance-profile" {
-  name = "${local.cluster_name}-instance-profile"
+  name = "${var.cluster_name}-instance-profile"
   role = aws_iam_role.workers.name
 }
 
@@ -86,10 +86,10 @@ resource "aws_security_group_rule" "workers_ingress_cluster" {
 }
 
 resource "aws_security_group_rule" "workers_ingress_office" {
-  description       = "Allow workers pods to receive communication from the cluster control plane."
+  description       = "Allow me to receive communication from the cluster control plane."
   protocol          = "tcp"
   security_group_id = aws_security_group.workers.id
-  cidr_blocks       = ["192.168.0.0/16"]
+  cidr_blocks       = ["62.219.194.102/32"]
   from_port         = 0
   to_port           = 65535
   type              = "ingress"
@@ -106,13 +106,13 @@ resource "aws_security_group_rule" "cluster_ingress_workers" {
 }
 
 resource "aws_iam_role" "workers" {
-  name                  = "${local.cluster_name}-worker-role"
+  name                  = "${var.cluster_name}-worker-role"
   assume_role_policy    = data.aws_iam_policy_document.workers_assume_role_policy.json
   force_detach_policies = true
   tags = merge(
     var.tags,
     {
-      "Name" = "${local.cluster_name}-worker-role"
+      "Name" = "${var.cluster_name}-worker-role"
     },
   )
 }
@@ -132,15 +132,6 @@ resource "aws_iam_role_policy_attachment" "workers_AmazonEKS_CNI_Policy" {
   role       = aws_iam_role.workers.name
 }
 
-resource "aws_iam_role_policy_attachment" "workers_AmazonS3FullAccess" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
-  role       = aws_iam_role.workers.name
-}
-
-resource "aws_iam_role_policy_attachment" "workers_AmazonSESFullAccess" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSESFullAccess"
-  role       = aws_iam_role.workers.name
-}
 
 resource "aws_iam_role_policy_attachment" "workers_autoscaling" {
   policy_arn = aws_iam_policy.worker_autoscaling.arn
@@ -153,50 +144,9 @@ resource "aws_iam_policy" "worker_autoscaling" {
   policy      = data.aws_iam_policy_document.worker_autoscaling.json
 }
 
-data "aws_iam_policy_document" "worker_autoscaling" {
-  statement {
-    sid    = "eksWorkerAutoscalingAll"
-    effect = "Allow"
-
-    actions = [
-      "autoscaling:DescribeAutoScalingGroups",
-      "autoscaling:DescribeAutoScalingInstances",
-      "autoscaling:DescribeLaunchConfigurations",
-      "autoscaling:DescribeTags",
-      "ec2:DescribeLaunchTemplateVersions",
-    ]
-
-    resources = ["*"]
-  }
-
-  statement {
-    sid    = "eksWorkerAutoscalingOwn"
-    effect = "Allow"
-
-    actions = [
-      "autoscaling:SetDesiredCapacity",
-      "autoscaling:TerminateInstanceInAutoScalingGroup",
-      "autoscaling:UpdateAutoScalingGroup",
-    ]
-
-    resources = ["*"]
-
-    condition {
-      test     = "StringEquals"
-      variable = "autoscaling:ResourceTag/kubernetes.io/cluster/${aws_eks_cluster.this.name}"
-      values   = ["owned"]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "autoscaling:ResourceTag/k8s.io/cluster-autoscaler/enabled"
-      values   = ["true"]
-    }
-  }
-}
 
 resource "aws_placement_group" "placement_group" {
-  name     = "${local.cluster_name}-placement-group"
+  name     = "${var.cluster_name}-placement-group"
   strategy = "spread"
 }
 
@@ -210,7 +160,7 @@ resource "aws_autoscaling_group" "auto-scaling" {
   placement_group           = aws_placement_group.placement_group.id
   health_check_grace_period = 30
   health_check_type         = "EC2"
-  vpc_zone_identifier       = tolist(data.aws_subnet_ids.app.ids)
+  vpc_zone_identifier       = tolist(data.aws_subnet_ids.subnets.ids)
   termination_policies      = ["OldestInstance"]
   wait_for_capacity_timeout = "10m"
   suspended_processes       = ["AZRebalance"]
@@ -244,16 +194,6 @@ resource "aws_autoscaling_group" "auto-scaling" {
     {
       "key"                 = "Name"
       "value"               = "${each.value.name}-worker"
-      "propagate_at_launch" = true
-    },
-    {
-      "key"                 = "Environment"
-      "value"               = "${var.tags["Environment"]}"
-      "propagate_at_launch" = true
-    },
-    {
-      "key"                 = "Function"
-      "value"               = "${var.tags["Function"]}"
       "propagate_at_launch" = true
     },
     {

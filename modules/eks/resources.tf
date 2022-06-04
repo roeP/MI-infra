@@ -1,16 +1,106 @@
+resource "aws_eks_cluster" "this" {
+  name                      = var.cluster_name
+  role_arn                  = aws_iam_role.cluster.arn
+  version                   = var.cluster_version
+  enabled_cluster_log_types = ["api"]
+  tags = merge(
+    var.tags,
+    {
+      "Name" = "${var.cluster_name}"
+    },
+  )
+
+  vpc_config {
+    security_group_ids      = [aws_security_group.cluster.id]
+    subnet_ids              = tolist(data.aws_subnet_ids.subnets.ids)
+    endpoint_private_access = true
+    endpoint_public_access  = true
+  }
+
+  timeouts {
+    create = var.cluster_create_timeout
+  }
+}
+
+resource "aws_iam_role" "cluster" {
+  name_prefix           = var.cluster_name
+  assume_role_policy    = data.aws_iam_policy_document.cluster_assume_role_policy.json
+  force_detach_policies = true
+  tags = merge(
+    var.tags,
+    {
+      "Name" = "${var.cluster_name}-iam-role"
+    },
+  )
+}
+
 resource "aws_iam_openid_connect_provider" "oidc_provider" {
   client_id_list  = ["sts.amazonaws.com"]
   thumbprint_list = ["9e99a48a9960b14926bb7f3b02e22da2b0ab7280"]
   url             = aws_eks_cluster.this.identity.0.oidc.0.issuer
 }
 
+resource "aws_iam_role_policy_attachment" "cluster_AmazonEKSClusterPolicy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+  role       = aws_iam_role.cluster.name
+}
+
+resource "aws_iam_role_policy_attachment" "cluster_AmazonEKSServicePolicy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSServicePolicy"
+  role       = aws_iam_role.cluster.name
+}
+
+
+resource "aws_security_group" "cluster" {
+  name_prefix = var.cluster_name
+  description = "EKS cluster security group."
+  vpc_id      = var.vpc_id
+  tags = merge(
+    var.tags,
+    {
+      "Name" = "${var.cluster_name}-eks_cluster_sg"
+    },
+  )
+}
+
+resource "aws_security_group_rule" "cluster_egress_internet" {
+  description       = "Allow cluster egress access to the Internet."
+  protocol          = "-1"
+  security_group_id = aws_security_group.cluster.id
+  cidr_blocks       = ["0.0.0.0/0"]
+  from_port         = 0
+  to_port           = 0
+  type              = "egress"
+}
+
+resource "aws_security_group_rule" "cluster_ingress_home" {
+  description       = "Allow me to receive communication from the cluster control plane."
+  protocol          = "tcp"
+  security_group_id = aws_security_group.cluster.id
+  cidr_blocks       = ["62.219.194.102/32"]
+  from_port         = 0
+  to_port           = 65535
+  type              = "ingress"
+}
+
+resource "aws_security_group_rule" "vpc_traffic" {
+  description              = "Allow vpc traffic"
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.cluster.id
+  cidr_blocks              = [data.aws_vpc.selected.cidr_block]
+  from_port                = 0
+  to_port                  = 65535
+  type                     = "ingress"
+}
+
+
 resource "aws_iam_role" "alb_controller_iam_role" {
   assume_role_policy = data.aws_iam_policy_document.federated_assume_role_policy.json
-  name               = "${local.cluster_name}-alb-controller-role"
+  name               = "${var.cluster_name}-alb-controller-role"
 }
 
 resource "aws_iam_role_policy" "alb_controller_iam_role_policy" {
-  name   = "${local.cluster_name}-alb-controller-policy"
+  name   = "${var.cluster_name}-alb-controller-policy"
   role   = aws_iam_role.alb_controller_iam_role.id
   policy = <<EOF
 {
@@ -225,7 +315,7 @@ EOF
 }
 
 resource "aws_iam_role_policy" "alb_controller_additional_role_policy" {
-  name   = "${local.cluster_name}-alb-controller-additional-policy"
+  name   = "${var.cluster_name}-alb-controller-additional-policy"
   role   = aws_iam_role.alb_controller_iam_role.id
   policy = <<EOF
 {
@@ -266,40 +356,4 @@ resource "aws_iam_role_policy" "alb_controller_additional_role_policy" {
 }
 EOF
 
-}
-
-resource "aws_ec2_tag" "web_subnets_eks_tags" {
-  for_each    = toset(data.aws_subnet_ids.web.ids)
-  resource_id = each.value
-  key         = "kubernetes.io/cluster/${local.cluster_name}"
-  value       = "shared"
-}
-
-resource "aws_ec2_tag" "web_subnets_eks_tags_alb_external" {
-  for_each    = toset(data.aws_subnet_ids.web.ids)
-  resource_id = each.value
-  key         = "kubernetes.io/role/elb"
-  value       = "1"
-
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
-resource "aws_ec2_tag" "app_subnets_eks_tags" {
-  for_each    = toset(data.aws_subnet_ids.app.ids)
-  resource_id = each.value
-  key         = "kubernetes.io/cluster/${local.cluster_name}"
-  value       = "shared"
-}
-
-resource "aws_ec2_tag" "app_subnets_eks_tags_alb_internal" {
-  for_each    = toset(data.aws_subnet_ids.app.ids)
-  resource_id = each.value
-  key         = "kubernetes.io/role/internal-elb"
-  value       = "1"
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }

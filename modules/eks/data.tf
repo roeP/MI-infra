@@ -1,15 +1,21 @@
-data "aws_iam_policy_document" "workers_assume_role_policy" {
-  statement {
-    sid = "EKSWorkerAssumeRole"
+data "aws_vpc" "selected" {
+  id = var.vpc_id
+}
 
-    actions = [
-      "sts:AssumeRole",
-    ]
+data "aws_subnet_ids" "subnets" {
+  vpc_id = data.aws_vpc.selected.id
+}
 
-    principals {
-      type        = "Service"
-      identifiers = ["ec2.amazonaws.com"]
-    }
+data "template_file" "userdata" {
+  for_each = var.workers
+  template = file("${path.module}/templates/userdata.sh.tpl")
+
+  vars = {
+    cluster_name         = aws_eks_cluster.this.name
+    endpoint             = aws_eks_cluster.this.endpoint
+    cluster_auth_base64  = aws_eks_cluster.this.certificate_authority[0].data
+    bootstrap_extra_args = ""
+    kubelet_extra_args   = "${each.value.kubelet_extra_args}"
   }
 }
 
@@ -23,6 +29,78 @@ data "aws_ami" "amzn-ami-eks" {
     values = [
       "amazon-eks-node-${var.cluster_version}-*"
     ]
+  }
+}
+
+data "aws_iam_policy_document" "worker_autoscaling" {
+  statement {
+    sid    = "eksWorkerAutoscalingAll"
+    effect = "Allow"
+
+    actions = [
+      "autoscaling:DescribeAutoScalingGroups",
+      "autoscaling:DescribeAutoScalingInstances",
+      "autoscaling:DescribeLaunchConfigurations",
+      "autoscaling:DescribeTags",
+      "ec2:DescribeLaunchTemplateVersions",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "eksWorkerAutoscalingOwn"
+    effect = "Allow"
+
+    actions = [
+      "autoscaling:SetDesiredCapacity",
+      "autoscaling:TerminateInstanceInAutoScalingGroup",
+      "autoscaling:UpdateAutoScalingGroup",
+    ]
+
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "autoscaling:ResourceTag/kubernetes.io/cluster/${aws_eks_cluster.this.name}"
+      values   = ["owned"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "autoscaling:ResourceTag/k8s.io/cluster-autoscaler/enabled"
+      values   = ["true"]
+    }
+  }
+}
+
+data "aws_iam_policy_document" "cluster_assume_role_policy" {
+  statement {
+    sid = "EKSClusterAssumeRole"
+
+    actions = [
+      "sts:AssumeRole",
+    ]
+
+    principals {
+      type        = "Service"
+      identifiers = ["eks.amazonaws.com"]
+    }
+  }
+}
+
+data "aws_iam_policy_document" "workers_assume_role_policy" {
+  statement {
+    sid = "EKSWorkerAssumeRole"
+
+    actions = [
+      "sts:AssumeRole",
+    ]
+
+    principals {
+      type        = "Service"
+      identifiers = ["ec2.amazonaws.com"]
+    }
   }
 }
 
@@ -44,54 +122,3 @@ data "aws_iam_policy_document" "federated_assume_role_policy" {
   }
 }
 
-data "aws_iam_policy_document" "cluster_assume_role_policy" {
-  statement {
-    sid = "EKSClusterAssumeRole"
-
-    actions = [
-      "sts:AssumeRole",
-    ]
-
-    principals {
-      type        = "Service"
-      identifiers = ["eks.amazonaws.com"]
-    }
-  }
-}
-
-data "template_file" "userdata" {
-  for_each = var.workers
-  template = file("${path.module}/templates/userdata.sh.tpl")
-
-  vars = {
-    cluster_name         = aws_eks_cluster.this.name
-    endpoint             = aws_eks_cluster.this.endpoint
-    cluster_auth_base64  = aws_eks_cluster.this.certificate_authority[0].data
-    bootstrap_extra_args = ""
-    kubelet_extra_args   = "${each.value.kubelet_extra_args}"
-  }
-}
-
-data "aws_subnet_ids" "app" {
-  vpc_id = var.vpc_id
-
-  tags = {
-    Tier = "App"
-  }
-}
-
-data "aws_subnet_ids" "web" {
-  vpc_id = var.vpc_id
-
-  tags = {
-    Tier = "Web"
-  }
-}
-
-#data "template_file" "config_map_aws_auth" {
-#  template = file("${path.module}/templates/config-map-aws-auth.yaml.tpl")
-#
-#  vars = {
-#    worker_role_arn = aws_iam_role.workers.arn
-#  }
-#}

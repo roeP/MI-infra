@@ -7,7 +7,7 @@ variable "cluster_log_retention_in_days" {
 variable "cluster_version" {
   description = "Kubernetes version to use for the EKS cluster."
   type        = string
-  default     = "1.17"
+  default     = "1.21"
 }
 
 variable "tags" {
@@ -18,11 +18,6 @@ variable "tags" {
 
 variable "vpc_id" {
   description = "VPC where the cluster and workers will be deployed."
-  type        = string
-}
-
-variable "region" {
-  description = "VPC region where the cluster and workers will be deployed."
   type        = string
 }
 
@@ -55,23 +50,11 @@ variable "config_output_path" {
   default     = "./"
 }
 
-variable "enable_fargate" {
-  description = "Enable fargate in eks"
-  default     = 0
-}
-
-variable "fargate_namespaces" {
-  description = "namespaces to run in fargate"
-  type        = list(any)
-  default     = null
-}
-
-# variable "on_demand_percentage_above_base_capacity" {
-#   description = "On demand capacity percentage above base desired capacity"
-#   default     = 0
-# }
-
 variable "workers" {
   description = "Cluster Workers map"
   type        = map(any)
+}
+
+variable "cluster_name" {
+   type        = string
 }
