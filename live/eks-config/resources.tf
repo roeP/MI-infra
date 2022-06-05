@@ -19,7 +19,7 @@ resource "kubernetes_ingress" "istio_ingress" {
     namespace = "istio-system"
     annotations = {
       "kubernetes.io/ingress.class"                        = "alb"
-      "alb.ingress.kubernetes.io/scheme"                   = "external"
+      "alb.ingress.kubernetes.io/scheme"                   = "internet-facing"
       "alb.ingress.kubernetes.io/success-codes"            = "200,404"
       "alb.ingress.kubernetes.io/listen-ports"             = "[{\"HTTP\": 80}]"
       "alb.ingress.kubernetes.io/load-balancer-attributes" = "deletion_protection.enabled=true"

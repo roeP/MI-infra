@@ -23,6 +23,10 @@ resource "helm_release" "istiod" {
     name  = "pilot.autoscaleMin"
     value = 1
   }
+  set {
+    name = "resources.requests.memory"
+    value = "10Mi" 
+  }
 }
 
 // Resource: https://github.com/istio/istio/tree/master/manifests/charts/gateway
@@ -32,9 +36,9 @@ resource "helm_release" "istio-ingressgateway" {
   chart      = "gateway"
   version    = "1.12.1"
   namespace  = "istio-system"
-  depends_on = [
-    helm_release.istiod
-  ]
+  # depends_on = [
+  #   helm_release.istiod
+  # ]
 
   set {
     name  = "service.type"
@@ -48,13 +52,13 @@ resource "helm_release" "istio-ingressgateway" {
 }
 
 // Resource: https://artifacthub.io/packages/helm/aws/aws-node-termination-handler
-resource "helm_release" "aws-node-termination-handler" {
-  name       = "aws-node-termination-handler"
-  repository = "https://aws.github.io/eks-charts"
-  chart      = "aws-node-termination-handler"
-  version    = "0.15.3"
-  namespace  = "kube-system"
-}
+# resource "helm_release" "aws-node-termination-handler" {
+#   name       = "aws-node-termination-handler"
+#   repository = "https://aws.github.io/eks-charts"
+#   chart      = "aws-node-termination-handler"
+#   version    = "0.15.3"
+#   namespace  = "kube-system"
+# }
 
 // Resource: https://artifacthub.io/packages/helm/cluster-autoscaler/cluster-autoscaler
 resource "helm_release" "cluster-autoscaler" {
